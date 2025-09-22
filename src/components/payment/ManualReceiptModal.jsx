@@ -106,16 +106,7 @@ const ManualReceiptModal = ({ show, onClose }) => {
     setShowReceipt(true);
   };
 
-  // Lazy-load jsPDF from CDN if needed
-  const ensureJsPDF = () => new Promise((resolve, reject) => {
-    if (window.jspdf?.jsPDF) return resolve(window.jspdf.jsPDF);
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    script.onload = () => resolve(window.jspdf?.jsPDF);
-    script.onerror = () => reject(new Error('Failed to load jsPDF'));
-    document.body.appendChild(script);
-  });
-
+  // Generate Half-A4 receipt PDF using shared utility
   const handleOkGeneratePDF = async (e) => {
     e.preventDefault();
     if (!selectedMember) {
@@ -124,34 +115,7 @@ const ManualReceiptModal = ({ show, onClose }) => {
     }
     const data = buildReceiptData();
     try {
-      const jsPDF = await ensureJsPDF();
-      if (!jsPDF) throw new Error('PDF library unavailable');
-      // Small receipt: 80mm x 120mm
-      const doc = new jsPDF({ unit: 'mm', format: [80, 120] });
-      let y = 10;
-      const leftX = 6;
-      const rightX = 40;
-      doc.setFontSize(12);
-      doc.text('Payment Receipt', 40, y, { align: 'center' });
-      y += 8;
-      doc.setFontSize(9);
-      const addRow = (label, value) => {
-        doc.text(String(label), leftX, y);
-        doc.text(String(value ?? ''), rightX, y);
-        y += 6;
-      };
-      addRow('Member', data.memberName);
-      addRow('Email', data.memberEmail);
-      addRow('Plan', data.planType);
-      addRow('Duration', `${data.duration} mo`);
-      addRow('Method', data.paymentMethod);
-      addRow('Amount', `₹${data.amount}`);
-      addRow('Period', `${data.periodStart} to ${data.periodEnd}`);
-      if (data.transactionId) addRow('Txn ID', data.transactionId);
-      if (data.notes) addRow('Notes', data.notes);
-      doc.setFontSize(8);
-      doc.text('Thank you!', 40, y + 2, { align: 'center' });
-      doc.save(`Receipt_${data.memberName?.replace(/\s+/g,'_') || 'Member'}_${Date.now()}.pdf`);
+      await (await import('@/utils/pdfUtils')).generateHalfA4ReceiptPDF(data, { gymTitle: 'GYM PAYMENT RECEIPT' });
       setReceiptData(data);
       setShowReceipt(true);
       toast.success('PDF generated');
@@ -281,20 +245,18 @@ const handlePrint = () => {
                 <h2 className="text-xl font-bold">Payment Receipt</h2>
                 <Button onClick={() => setShowReceipt(false)} variant="ghost" className="print:hidden">Edit</Button>
               </div>
-              <div id="receipt-content" className="bg-white text-black rounded-lg shadow p-4 print:shadow-none print:border-none print:p-2" style={{maxWidth:'400px', margin:'0 auto'}}>
-                <table className="w-full text-sm">
-                  <tbody>
-                    <tr><td className="font-semibold">Member:</td><td>{receiptData?.memberName}</td></tr>
-                    <tr><td className="font-semibold">Plan:</td><td>{receiptData?.planType}</td></tr>
-                    <tr><td className="font-semibold">Duration:</td><td>{receiptData?.duration} mo</td></tr>
-                    <tr><td className="font-semibold">Method:</td><td>{receiptData?.paymentMethod}</td></tr>
-                    <tr><td className="font-semibold">Amount:</td><td>₹{receiptData?.amount}</td></tr>
-                    <tr><td className="font-semibold">Period:</td><td>{receiptData?.periodStart} to {receiptData?.periodEnd}</td></tr>
-                    {receiptData?.transactionId && <tr><td className="font-semibold">Transaction ID:</td><td>{receiptData.transactionId}</td></tr>}
-                    {receiptData?.notes && <tr><td className="font-semibold">Notes:</td><td>{receiptData.notes}</td></tr>}
-                  </tbody>
-                </table>
-                <div className="mt-3 text-center text-xs font-bold">Thank you!</div>
+              <div id="receipt-content" className="print:shadow-none print:border-none print:p-2">
+                <div className="mb-2 text-center font-bold">Preview (Half A4)</div>
+                <div className="border rounded-md overflow-hidden">
+                  <div className="bg-white">
+                    {/* Use shared preview component for consistency */}
+                    {/* eslint-disable-next-line react/jsx-no-undef */}
+                    {(() => {
+                      const Preview = require('@/components/payments/ReceiptPreviewHalfA4').default;
+                      return <Preview data={receiptData} gymTitle={'GYM PAYMENT RECEIPT'} compact={true} />;
+                    })()}
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end mt-4 gap-2 print:hidden">
                 <Button onClick={handlePrint} className="bg-green-600 hover:bg-green-700">Print Receipt</Button>

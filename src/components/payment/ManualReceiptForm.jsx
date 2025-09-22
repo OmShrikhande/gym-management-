@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Mail, User, CreditCard, DollarSign, FileText, Printer, Send } from 'lucide-react';
 import apiClient from '@/lib/apiClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
+import ReceiptPreviewHalfA4 from '@/components/payments/ReceiptPreviewHalfA4';
+import { generateHalfA4ReceiptPDF } from '@/utils/pdfUtils';
 
 const ManualReceiptForm = ({ onReceiptSent }) => {
   const [formData, setFormData] = useState({
@@ -153,28 +155,11 @@ const ManualReceiptForm = ({ onReceiptSent }) => {
     window.print();
   };
 
-  // Lazy-load jsPDF UMD from CDN and return constructor
-  const ensureJsPDF = async () => {
-    if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load jsPDF'));
-      document.head.appendChild(script);
-    });
-    return window.jspdf?.jsPDF;
-  };
-
-  // Generate small two-column PDF receipt (80mm x 120mm)
+  // Generate Half-A4 receipt PDF using shared utility
   const handleGeneratePDF = async (e) => {
     e.preventDefault();
     try {
-      const jsPDF = await ensureJsPDF();
-      if (!jsPDF) throw new Error('jsPDF not available');
-
       const data = { ...formData };
-
       // Ensure periodEnd is computed if missing
       if (!data.periodEnd && data.periodStart && data.duration) {
         const d = new Date(data.periodStart);
@@ -182,87 +167,11 @@ const ManualReceiptForm = ({ onReceiptSent }) => {
         data.periodEnd = d.toISOString().slice(0,10);
         setFormData(prev => ({ ...prev, periodEnd: data.periodEnd }));
       }
-
-      // Enhanced PDF layout
-      const doc = new jsPDF({ unit: 'mm', format: [80, 120] });
-      let y = 12;
-
-  // Header: white rectangle with black text + gym owner branding
-  doc.setFillColor(255, 255, 255); // White
-  doc.roundedRect(5, 5, 70, 20, 3, 3, 'F');
-  doc.setDrawColor(30, 41, 59);
-  doc.roundedRect(5, 5, 70, 20, 3, 3, 'S');
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  const gymTitle = (user?.gymName || `${user?.name || 'Gym Owner'}'s Gym`).toUpperCase();
-  doc.text(gymTitle, 40, 13, { align: 'center' });
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('GYM PAYMENT RECEIPT', 40, 18, { align: 'center' });
-  // Format date as DD/MM/YY
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, '0');
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const yy = String(now.getFullYear()).slice(-2);
-  const formattedDate = `${dd}/${mm}/${yy}`;
-  doc.text('Date: ' + formattedDate, 40, 23, { align: 'center' });
-
-      // Main body
-      y = 28;
-      doc.setTextColor(30, 41, 59); // Slate-900
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Member Details', 8, y);
-      doc.setDrawColor(59, 130, 246); // Blue border
-      doc.line(7, y + 1, 73, y + 1);
-      y += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(`Name:`, 10, y); doc.text(data.memberName || '', 35, y);
-      y += 5;
-      doc.text(`Email:`, 10, y); doc.text(data.memberEmail || '', 35, y);
-      y += 5;
-      if (data.trainerName) { doc.text(`Trainer:`, 10, y); doc.text(data.trainerName, 35, y); y += 5; }
-
-      y += 2;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Payment Details', 8, y);
-      doc.line(7, y + 1, 73, y + 1);
-      y += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Plan:`, 10, y); doc.text(data.planType || '', 35, y);
-      y += 5;
-      doc.text(`Duration:`, 10, y); doc.text(`${data.duration || '0'} month(s)`, 35, y);
-      y += 5;
-      doc.text(`Method:`, 10, y); doc.text(data.paymentMethod || '', 35, y);
-      y += 5;
-      doc.text(`Amount:`, 10, y); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129); doc.text(`₹${data.amount || '0'}`, 35, y);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
-      y += 5;
-      doc.text(`Period:`, 10, y); doc.text(`${data.periodStart || ''} to ${data.periodEnd || ''}`, 35, y);
-      y += 5;
-      if (data.transactionId) { doc.text(`Txn ID:`, 10, y); doc.text(data.transactionId, 35, y); y += 5; }
-      if (data.notes) { doc.text(`Notes:`, 10, y); doc.text(data.notes, 35, y, { maxWidth: 38 }); y += 8; }
-
-      // Footer
-      y = 110;
-      doc.setDrawColor(203, 213, 225);
-      doc.line(10, y, 70, y);
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Thank you for your payment!', 40, y + 6, { align: 'center' });
-      doc.setFontSize(8);
-      doc.text('Powered by Gym Management System', 40, y + 11, { align: 'center' });
-
-      // Save
-      const safeName = (data.memberName || 'Member').replace(/\s+/g, '_');
-      doc.save(`Receipt_${safeName}_${Date.now()}.pdf`);
-
+      await generateHalfA4ReceiptPDF(data, { gymTitle: (user?.gymName || `${user?.name || 'Gym Owner'}'s Gym`) });
       setMessage({ type: 'success', text: 'PDF generated and downloaded.' });
     } catch (err) {
       console.error('PDF generation failed:', err);
-      setMessage({ type: 'error', text: 'PDF generation failed. Falling back to Print.' });
+      setMessage({ type: 'error', text: 'PDF generation failed. Please use Print as fallback.' });
       window.print();
     }
   };
@@ -271,13 +180,13 @@ const ManualReceiptForm = ({ onReceiptSent }) => {
   const paymentMethods = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Razorpay', 'Online'];
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-gray-800/50 border border-gray-700 rounded-lg shadow-md">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white mb-2 flex items-center">
-          <FileText className="mr-3 text-blue-400" />
+    <div className="max-w-4xl mx-auto p-4 bg-gray-800/50 border border-gray-700 rounded-lg shadow-md">
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-white mb-1 flex items-center">
+          <FileText className="mr-2 text-blue-400" />
           Manual Receipt (Print Only)
         </h2>
-        <p className="text-gray-400">
+        <p className="text-gray-400 text-sm">
           Fill the details and print the receipt. Manual email sending is disabled.
         </p>
       </div>
@@ -292,10 +201,10 @@ const ManualReceiptForm = ({ onReceiptSent }) => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Member Information */}
-        <div className="bg-gray-800/40 p-6 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 flex items-center text-white">
+        <div className="bg-gray-800/40 p-4 rounded-lg border border-gray-700">
+          <h3 className="text-base font-semibold mb-3 flex items-center text-white">
             <User className="mr-2 text-gray-300" />
             Member Information
           </h3>
@@ -374,8 +283,8 @@ const ManualReceiptForm = ({ onReceiptSent }) => {
         </div>
 
         {/* Payment Information */}
-        <div className="bg-gray-800/40 p-6 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 flex items-center text-white">
+        <div className="bg-gray-800/40 p-4 rounded-lg border border-gray-700">
+          <h3 className="text-base font-semibold mb-3 flex items-center text-white">
             <DollarSign className="mr-2 text-gray-300" />
             Payment Information
           </h3>
@@ -492,25 +401,14 @@ const ManualReceiptForm = ({ onReceiptSent }) => {
         </div>
 
         {/* Preview Section */}
-        <div className="bg-blue-900/20 p-6 rounded-lg border border-blue-800">
-          <h3 className="text-lg font-semibold mb-4 flex items-center text-blue-300">
+        <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-800">
+          <h3 className="text-base font-semibold mb-3 flex items-center text-blue-300">
             <Printer className="mr-2" />
             Receipt Preview (Printable)
           </h3>
           
-          <div className="grid grid-cols-2 gap-4 text-sm text-gray-200">
-            <div>
-              <p><strong>Member:</strong> {formData.memberName || 'Not specified'}</p>
-              <p><strong>Email:</strong> {formData.memberEmail || 'Not specified'}</p>
-              <p><strong>Amount:</strong> ₹{formData.amount || '0'}</p>
-              <p><strong>Plan:</strong> {formData.planType} ({formData.duration} month{formData.duration > 1 ? 's' : ''})</p>
-            </div>
-            <div>
-              <p><strong>Payment Method:</strong> {formData.paymentMethod}</p>
-              <p><strong>Transaction ID:</strong> {formData.transactionId || 'Auto-generated'}</p>
-              <p><strong>Period:</strong> {formData.periodStart} to {formData.periodEnd || 'Calculating...'}</p>
-              <p><strong>Trainer:</strong> {formData.trainerName || 'Not assigned'}</p>
-            </div>
+          <div className="grid grid-cols-1">
+            <ReceiptPreviewHalfA4 data={formData} gymTitle={(user?.gymName || `${user?.name || 'Gym Owner'}'s Gym`)} compact={true} />
           </div>
         </div>
 

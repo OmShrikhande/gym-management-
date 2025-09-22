@@ -1,6 +1,25 @@
-> Add the expense in the report page
-> in the total revenue show (income - expense)
-> starting date must be taken which is given not the current date
-> edit the members details
-> owner can renew the member by changing the membership status and the end date  and can add the payment
+> Add the expense in the report page ----------------------> Done
+> in the total revenue show (income - expense) ------------. Done
+ starting date must be taken which is given not the current date
+> edit the members details   
+> owner can renew the member by changing the membership status and the end date  and can add the payment ---------------------------------------> Done
 > trainer can scan only 2 times 
+
+
+
+
+errors
+
+GYM OWNER
+> owner is unable to delete the plans--------------------> Done
+> in the payment receipt there is no gym name -----------> Done 
+> receipt must be in horizontal in a5 size
+> there is no receipt history----------------------------> Done
+> no stats of receipt in the receipt page----------------> Done
+> workout page is flickering ----------------------------> Done
+
+ADMIN 
+> in the billing and plans it is showing the pending amt and overdue 
+> there is no button to delete the gym in the gym management system
+> in the usermanagement there is the option to delete the gym but it is not working 
+> in the Billing and Plans, invoice and revenue is not there we need to create it 
