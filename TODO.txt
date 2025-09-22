@@ -1,0 +1,6 @@
+> Add the expense in the report page
+> in the total revenue show (income - expense)
+> starting date must be taken which is given not the current date
+> edit the members details
+> owner can renew the member by changing the membership status and the end date  and can add the payment
+> trainer can scan only 2 times 

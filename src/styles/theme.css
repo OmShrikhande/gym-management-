@@ -1,0 +1,56 @@
+/* Dark Theme CSS Variables (no white anywhere) */
+:root {
+  --primary: #60A5FA; /* soft sky blue */
+  --primary-rgb: 96, 165, 250;
+  --secondary: #A78BFA; /* soft violet */
+  --secondary-rgb: 167, 139, 250;
+  /* Dark theme base */
+  --background: #0b0f17; /* deep navy */
+  --background-rgb: 11, 15, 23;
+  --card: #111827; /* slate-900 */
+  --card-rgb: 17, 24, 39;
+  --sidebar: #0f172a; /* slate-950 */
+  --sidebar-rgb: 15, 23, 42;
+  --text: #E5E7EB; /* gray-200 */
+  --text-rgb: 229, 231, 235;
+}
+
+/* Apply theme to components */
+.bg-card { background-color: var(--card) !important; }
+.bg-sidebar { background-color: var(--sidebar) !important; }
+.text-theme { color: var(--text) !important; }
+
+/* Override card styles */
+.card {
+  background-color: var(--card);
+  color: var(--text);
+  border-color: rgba(var(--text-rgb), 0.08);
+}
+
+/* Override button styles */
+.btn-primary {
+  background-color: color-mix(in srgb, var(--primary) 85%, black);
+  color: #0b111a; /* dark-foreground for contrast */
+}
+
+.btn-secondary {
+  background-color: color-mix(in srgb, var(--secondary) 85%, black);
+  color: #0b111a;
+}
+
+/* Apply theme to dashboard */
+body {
+  background-color: var(--background);
+  color: var(--text);
+  background-image: radial-gradient(circle at 20% 10%, rgba(var(--primary-rgb),0.12) 0%, rgba(0,0,0,0) 40%),
+                    radial-gradient(circle at 80% 30%, rgba(var(--secondary-rgb),0.12) 0%, rgba(0,0,0,0) 35%),
+                    radial-gradient(circle at 50% 80%, rgba(59,130,246,0.10) 0%, rgba(0,0,0,0) 40%);
+  background-attachment: fixed;
+}
+
+/* Custom card styles */
+.card-themed {
+  background-color: var(--card);
+  border: 1px solid rgba(var(--text-rgb), 0.08);
+  color: var(--text);
+}
