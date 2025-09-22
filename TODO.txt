@@ -13,7 +13,7 @@ errors
 GYM OWNER
 > owner is unable to delete the plans--------------------> Done
 > in the payment receipt there is no gym name -----------> Done 
-> receipt must be in horizontal in a5 size
+> receipt must be in horizontal in a5 size---------------> Done
 > there is no receipt history----------------------------> Done
 > no stats of receipt in the receipt page----------------> Done
 > workout page is flickering ----------------------------> Done

@@ -187,7 +187,16 @@ const DashboardHeader = () => {
                 <DropdownMenuSeparator className="bg-gray-700" />
                 <DropdownMenuItem 
                   className="text-red-400 hover:bg-red-900 hover:text-red-300"
-                  onClick={logout}
+                  onSelect={async (e) => {
+                    // Use onSelect for reliable selection handling in dropdown menus
+                    e.preventDefault();
+                    try {
+                      await logout();
+                    } finally {
+                      // Ensure UI redirects to login page immediately
+                      window.location.href = '/';
+                    }
+                  }}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>{t('logout')}</span>
