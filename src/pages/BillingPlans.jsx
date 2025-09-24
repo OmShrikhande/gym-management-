@@ -160,12 +160,22 @@ const BillingPlans = () => {
         setTotalRevenue(revenueResponse.data.totalRevenue || 0);
       }
       
-      // For pending and overdue amounts, we would need additional API endpoints
-      // For now, we'll use mock data
-      setPendingAmount(149);
-      setOverdueAmount(99);
+      // Remove mock pending/overdue for super admin
+      if (!isSuperAdmin) {
+        // Keep existing fallback calculations for non-super admin if needed
+        // These could be replaced with real endpoints in future
+        setPendingAmount(149);
+        setOverdueAmount(99);
+      } else {
+        setPendingAmount(0);
+        setOverdueAmount(0);
+      }
     } catch (error) {
       console.error('Error fetching billing stats:', error);
+      if (isSuperAdmin) {
+        setPendingAmount(0);
+        setOverdueAmount(0);
+      }
     }
   };
   
@@ -546,29 +556,33 @@ const BillingPlans = () => {
             </CardContent>
           </Card>
           
-          <Card className="bg-gray-800/50 border-gray-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Pending Amount</p>
-                  <p className="text-2xl font-bold text-white">₹{displayPendingAmount}</p>
-                </div>
-                <Calendar className="h-8 w-8 text-yellow-500" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gray-800/50 border-gray-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Overdue Amount</p>
-                  <p className="text-2xl font-bold text-white">₹{displayOverdueAmount}</p>
-                </div>
-                <CreditCard className="h-8 w-8 text-red-500" />
-              </div>
-            </CardContent>
-          </Card>
+          {!isSuperAdmin && (
+            <>
+              <Card className="bg-gray-800/50 border-gray-700">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Pending Amount</p>
+                      <p className="text-2xl font-bold text-white">₹{displayPendingAmount}</p>
+                    </div>
+                    <Calendar className="h-8 w-8 text-yellow-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gray-800/50 border-gray-700">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Overdue Amount</p>
+                      <p className="text-2xl font-bold text-white">₹{displayOverdueAmount}</p>
+                    </div>
+                    <CreditCard className="h-8 w-8 text-red-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
           
           <Card className="bg-gray-800/50 border-gray-700">
             <CardContent className="p-6">

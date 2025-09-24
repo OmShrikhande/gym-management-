@@ -87,7 +87,7 @@ const buildQuery = (filters, forStats = false) => {
 };
 
 const Reports = () => {
-  const { isGymOwner, authFetch, users, user, fetchUsers } = useAuth();
+  const { isGymOwner, isSuperAdmin, authFetch, users, user, fetchUsers } = useAuth();
 
   const [filters, setFilters] = useState(defaultFilters());
   const [isLoading, setIsLoading] = useState(false);
@@ -105,7 +105,24 @@ const Reports = () => {
 
   // Derived summary for top cards
   const summary = useMemo(() => {
-    // Total Revenue must reflect sum of all paidAmount for members registered under this gym owner
+    // If super admin: prefer backend subscription revenue
+    if (isSuperAdmin) {
+      // Revenue will be derived from stats.totalAmount when filters applied,
+      // otherwise fallback to sum of paidAmount across all members
+      const allMembers = users || [];
+      const totalRevenueFallback = allMembers.filter(u => u.role === 'member')
+        .reduce((sum, m) => sum + Number(m.paidAmount || 0), 0);
+      return {
+        members: (users?.filter?.(u => u.role === 'member').length) || 0,
+        revenue: Number(stats.totalAmount || 0) || totalRevenueFallback,
+        trainers: (users?.filter?.(u => u.role === 'trainer').length) || 0,
+        avgPerMember: 0,
+        cash: Number(stats.cashTotal || 0),
+        online: Number(stats.onlineTotal || 0)
+      };
+    }
+
+    // Gym owner logic
     const allMembers = users || [];
     const ownerId = user?._id;
     const membersUnderOwner = ownerId ? allMembers.filter(u => u.role === 'member' && (u.gym === ownerId || u.gymId === ownerId || u.owner === ownerId)) : allMembers.filter(u => u.role === 'member');
@@ -123,7 +140,7 @@ const Reports = () => {
       cash: Number(stats.cashTotal || 0),
       online: Number(stats.onlineTotal || 0)
     };
-  }, [users, user, stats]);
+  }, [users, user, stats, isSuperAdmin]);
 
   const handleFilterChange = useCallback((field, value) => {
     if (field === 'reset') return setFilters(defaultFilters());
@@ -142,13 +159,23 @@ const Reports = () => {
       const statsQuery = buildQuery(filters, true);
       const listQuery = buildQuery(filters, false);
 
-      // 1) Stats
+      // 1) Stats (member payments)
       const statsRes = await authFetch(`/payments/member-payments/stats?${statsQuery}`);
+      let nextStats = { totalAmount: 0, uniqueMembers: 0, onlineTotal: 0, cashTotal: 0, onlineCount: 0, cashCount: 0 };
       if (statsRes?.success || statsRes?.status === 'success') {
-        setStats(statsRes.data?.stats || {});
-      } else {
-        setStats({ totalAmount: 0, uniqueMembers: 0, onlineTotal: 0, cashTotal: 0, onlineCount: 0, cashCount: 0 });
+        nextStats = statsRes.data?.stats || nextStats;
       }
+
+      // If super admin, prefer subscription revenue total
+      if (isSuperAdmin) {
+        try {
+          const subRev = await authFetch('/subscriptions/revenue/total');
+          if (subRev?.success || subRev?.status === 'success') {
+            nextStats.totalAmount = Number(subRev.data?.totalRevenue || 0);
+          }
+        } catch {}
+      }
+      setStats(nextStats);
 
       // 2) List
       const listRes = await authFetch(`/payments/member-payments?${listQuery}`);
@@ -176,9 +203,10 @@ const Reports = () => {
   }, [filters, authFetch]);
 
   useEffect(() => {
-    if (!isGymOwner) return; // reports are primarily for gym owners
+    // Load for gym owners and super admins
+    if (!isGymOwner && !isSuperAdmin) return;
     loadData();
-  }, [isGymOwner, loadData]);
+  }, [isGymOwner, isSuperAdmin, loadData]);
 
   return (
     <DashboardLayout>

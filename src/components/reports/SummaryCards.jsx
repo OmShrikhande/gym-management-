@@ -52,7 +52,6 @@ const SummaryCards = ({ summary }) => {
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <StatCard icon={Users} label="Total Members" value={summary.members} accent="blue" />
       <StatCard icon={IndianRupee} label="Total Revenue" value={formatINR(summary.revenue)} accent="yellow" />
-      <StatCard icon={Dumbbell} label="Total Trainers" value={summary.trainers} accent="purple" />
       <StatCard icon={ReceiptIndianRupee} label="Avg. Revenue / Member" value={formatINR(summary.avgPerMember)} accent="emerald" />
     </div>
   );
