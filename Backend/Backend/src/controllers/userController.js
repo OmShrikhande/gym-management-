@@ -573,80 +573,114 @@ export const deleteUser = catchAsync(async (req, res, next) => {
       return next(new AppError('Only super-admin can delete a gym owner', 403));
     }
 
-    const session = await mongoose.startSession();
-    try {
-      session.startTransaction();
+    const gymOwnerId = user._id;
 
-      const gymOwnerId = user._id;
-
+    // Helper to perform cascade deletions, optionally within a session
+    const performCascadeDeletes = async (session = null) => {
       // Find associated trainers and members first (IDs used for related deletions)
       const [trainerDocs, memberDocs] = await Promise.all([
-        User.find({ role: 'trainer', $or: [{ createdBy: gymOwnerId }, { gymId: gymOwnerId }] }, { _id: 1 }).session(session),
-        User.find({ role: 'member', $or: [{ createdBy: gymOwnerId }, { gymId: gymOwnerId }] }, { _id: 1 }).session(session)
+        session
+          ? User.find({ role: 'trainer', $or: [{ createdBy: gymOwnerId }, { gymId: gymOwnerId }] }, { _id: 1 }).session(session)
+          : User.find({ role: 'trainer', $or: [{ createdBy: gymOwnerId }, { gymId: gymOwnerId }] }, { _id: 1 }),
+        session
+          ? User.find({ role: 'member', $or: [{ createdBy: gymOwnerId }, { gymId: gymOwnerId }] }, { _id: 1 }).session(session)
+          : User.find({ role: 'member', $or: [{ createdBy: gymOwnerId }, { gymId: gymOwnerId }] }, { _id: 1 })
       ]);
       const trainerIds = trainerDocs.map(d => d._id);
       const memberIds = memberDocs.map(d => d._id);
 
-      // Delete associated trainers
-      const trainerResult = await User.deleteMany(
-        { _id: { $in: trainerIds } }
-      ).session(session);
+      // Delete associated trainers and members
+      const trainerDelete = session
+        ? User.deleteMany({ _id: { $in: trainerIds } }).session(session)
+        : User.deleteMany({ _id: { $in: trainerIds } });
+      const memberDelete = session
+        ? User.deleteMany({ _id: { $in: memberIds } }).session(session)
+        : User.deleteMany({ _id: { $in: memberIds } });
 
-      // Delete associated members
-      const memberResult = await User.deleteMany(
-        { _id: { $in: memberIds } }
-      ).session(session);
+      const [trainerResult, memberResult] = await Promise.all([trainerDelete, memberDelete]);
 
       // Delete related content tied to this gym owner (preserve payments for audit/revenue)
-      const [workoutResult, dietResult, messageResult, subscriptionResult, planResult, enquiryResult, expenseResult, notificationResult] = await Promise.all([
+      const deletes = [
         // Workouts owned by this gym, created by trainers of this gym, or assigned to this gym's members
-        Workout.deleteMany({ $or: [ { gym: gymOwnerId }, { trainer: { $in: trainerIds } }, { assignedTo: { $in: memberIds } } ] }).session(session),
+        session
+          ? Workout.deleteMany({ $or: [ { gym: gymOwnerId }, { trainer: { $in: trainerIds } }, { assignedTo: { $in: memberIds } } ] }).session(session)
+          : Workout.deleteMany({ $or: [ { gym: gymOwnerId }, { trainer: { $in: trainerIds } }, { assignedTo: { $in: memberIds } } ] }),
         // Diet plans created by trainers of this gym, assigned to members of this gym, or tied to this gym
-        DietPlan.deleteMany({ $or: [ { gym: gymOwnerId }, { trainer: { $in: trainerIds } }, { assignedTo: { $in: memberIds } } ] }).session(session),
+        session
+          ? DietPlan.deleteMany({ $or: [ { gym: gymOwnerId }, { trainer: { $in: trainerIds } }, { assignedTo: { $in: memberIds } } ] }).session(session)
+          : DietPlan.deleteMany({ $or: [ { gym: gymOwnerId }, { trainer: { $in: trainerIds } }, { assignedTo: { $in: memberIds } } ] }),
         // Messages sent by gym owner or its trainers, or targeting their members/trainers
-        Message.deleteMany({ $or: [ { sender: gymOwnerId }, { sender: { $in: trainerIds } }, { recipients: { $in: [...trainerIds, ...memberIds] } } ] }).session(session),
+        session
+          ? Message.deleteMany({ $or: [ { sender: gymOwnerId }, { sender: { $in: trainerIds } }, { recipients: { $in: [...trainerIds, ...memberIds] } } ] }).session(session)
+          : Message.deleteMany({ $or: [ { sender: gymOwnerId }, { sender: { $in: trainerIds } }, { recipients: { $in: [...trainerIds, ...memberIds] } } ] }),
         // Subscription records for this gym owner
-        Subscription.deleteMany({ gymOwner: gymOwnerId }).session(session),
+        session ? Subscription.deleteMany({ gymOwner: gymOwnerId }).session(session) : Subscription.deleteMany({ gymOwner: gymOwnerId }),
         // Gym owner’s own plans
-        GymOwnerPlan.deleteMany({ gymOwnerId }).session(session),
+        session ? GymOwnerPlan.deleteMany({ gymOwnerId }).session(session) : GymOwnerPlan.deleteMany({ gymOwnerId }),
         // Enquiries for this gym
-        Enquiry.deleteMany({ gymOwner: gymOwnerId }).session(session),
+        session ? Enquiry.deleteMany({ gymOwner: gymOwnerId }).session(session) : Enquiry.deleteMany({ gymOwner: gymOwnerId }),
         // Expenses for this gym
-        Expense.deleteMany({ gymOwner: gymOwnerId }).session(session),
+        session ? Expense.deleteMany({ gymOwner: gymOwnerId }).session(session) : Expense.deleteMany({ gymOwner: gymOwnerId }),
         // Notifications to members/trainers/owner of this gym
-        Notification.deleteMany({ recipient: { $in: [gymOwnerId, ...trainerIds, ...memberIds] } }).session(session)
-      ]);
+        session ? Notification.deleteMany({ recipient: { $in: [gymOwnerId, ...trainerIds, ...memberIds] } }).session(session) : Notification.deleteMany({ recipient: { $in: [gymOwnerId, ...trainerIds, ...memberIds] } })
+      ];
+
+      const [workoutResult, dietResult, messageResult, subscriptionResult, planResult, enquiryResult, expenseResult, notificationResult] = await Promise.all(deletes);
 
       // Delete the gym owner itself
-      const ownerResult = await User.deleteOne({ _id: gymOwnerId }).session(session);
+      const ownerResult = session
+        ? await User.deleteOne({ _id: gymOwnerId }).session(session)
+        : await User.deleteOne({ _id: gymOwnerId });
 
+      return { trainerResult, memberResult, workoutResult, dietResult, messageResult, subscriptionResult, planResult, enquiryResult, expenseResult, notificationResult, ownerResult };
+    };
+
+    // Try transactional delete first; if not supported, fallback to non-transactional
+    let results;
+    let usedTransaction = false;
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+      results = await performCascadeDeletes(session);
       await session.commitTransaction();
-      session.endSession();
-
-      return res.status(200).json({
-        status: 'success',
-        success: true,
-        message: 'Gym owner and all associated data deleted successfully',
-        data: {
-          deletedGymOwner: ownerResult.deletedCount || 0,
-          deletedTrainers: trainerResult.deletedCount || 0,
-          deletedMembers: memberResult.deletedCount || 0,
-          deletedWorkouts: workoutResult.deletedCount || 0,
-          deletedDietPlans: dietResult.deletedCount || 0,
-          deletedMessages: messageResult.deletedCount || 0,
-          deletedSubscriptions: subscriptionResult.deletedCount || 0,
-          deletedOwnerPlans: planResult.deletedCount || 0,
-          deletedEnquiries: enquiryResult.deletedCount || 0,
-          deletedExpenses: expenseResult.deletedCount || 0,
-          deletedNotifications: notificationResult.deletedCount || 0
-        }
-      });
+      usedTransaction = true;
     } catch (err) {
-      await session.abortTransaction();
+      // Likely running on standalone MongoDB where transactions are not supported
+      console.warn('Transaction failed or unsupported. Falling back to non-transactional cascade delete.', err?.message || err);
+      try {
+        results = await performCascadeDeletes();
+      } catch (fallbackErr) {
+        await session.abortTransaction().catch(() => {});
+        session.endSession();
+        console.error('Cascade delete failed:', fallbackErr);
+        return next(new AppError('Failed to delete gym owner and related users', 500));
+      }
+    } finally {
+      if (!usedTransaction) {
+        // Ensure any open transaction is aborted before ending session
+        await session.abortTransaction().catch(() => {});
+      }
       session.endSession();
-      console.error('Cascade delete failed:', err);
-      return next(new AppError('Failed to delete gym owner and related users', 500));
     }
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      message: 'Gym owner and all associated data deleted successfully',
+      data: {
+        deletedGymOwner: results.ownerResult?.deletedCount || 0,
+        deletedTrainers: results.trainerResult?.deletedCount || 0,
+        deletedMembers: results.memberResult?.deletedCount || 0,
+        deletedWorkouts: results.workoutResult?.deletedCount || 0,
+        deletedDietPlans: results.dietResult?.deletedCount || 0,
+        deletedMessages: results.messageResult?.deletedCount || 0,
+        deletedSubscriptions: results.subscriptionResult?.deletedCount || 0,
+        deletedOwnerPlans: results.planResult?.deletedCount || 0,
+        deletedEnquiries: results.enquiryResult?.deletedCount || 0,
+        deletedExpenses: results.expenseResult?.deletedCount || 0,
+        deletedNotifications: results.notificationResult?.deletedCount || 0
+      }
+    });
   }
   
   // Check if the user is a member and belongs to the current gym owner
