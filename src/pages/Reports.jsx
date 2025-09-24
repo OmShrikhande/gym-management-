@@ -156,43 +156,47 @@ const Reports = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const statsQuery = buildQuery(filters, true);
-      const listQuery = buildQuery(filters, false);
-
-      // 1) Stats (member payments)
-      const statsRes = await authFetch(`/payments/member-payments/stats?${statsQuery}`);
       let nextStats = { totalAmount: 0, uniqueMembers: 0, onlineTotal: 0, cashTotal: 0, onlineCount: 0, cashCount: 0 };
-      if (statsRes?.success || statsRes?.status === 'success') {
-        nextStats = statsRes.data?.stats || nextStats;
-      }
 
-      // If super admin, prefer subscription revenue total
       if (isSuperAdmin) {
+        // For super admin, get subscription revenue total
         try {
           const subRev = await authFetch('/subscriptions/revenue/total');
           if (subRev?.success || subRev?.status === 'success') {
             nextStats.totalAmount = Number(subRev.data?.totalRevenue || 0);
           }
         } catch {}
-      }
-      setStats(nextStats);
+        setStats(nextStats);
+        setPayments([]); // No payments list for super admin
+      } else if (isGymOwner) {
+        // For gym owner, load stats and payments
+        const statsQuery = buildQuery(filters, true);
+        const listQuery = buildQuery(filters, false);
 
-      // 2) List
-      const listRes = await authFetch(`/payments/member-payments?${listQuery}`);
-      if (listRes?.success || listRes?.status === 'success') {
-        const list = listRes.data?.payments || [];
-        const transformed = list.map(p => ({
-          member: p.memberDetails?.name || p.memberName || 'Unknown',
-          email: p.memberDetails?.email || p.memberEmail || '',
-          amount: Number(p.amount || 0),
-          mode: (p.paymentMethod || p.method || 'unknown').toLowerCase(),
-          date: p.paymentDate?.slice?.(0,10) || '',
-          planType: p.planType || p.plan || ''
-        }));
-        const name = (filters.memberName || '').toLowerCase();
-        setPayments(name ? transformed.filter(x => (x.member || '').toLowerCase().includes(name)) : transformed);
-      } else {
-        setPayments([]);
+        // 1) Stats (member payments)
+        const statsRes = await authFetch(`/payments/member-payments/stats?${statsQuery}`);
+        if (statsRes?.success || statsRes?.status === 'success') {
+          nextStats = statsRes.data?.stats || nextStats;
+        }
+        setStats(nextStats);
+
+        // 2) List
+        const listRes = await authFetch(`/payments/member-payments?${listQuery}`);
+        if (listRes?.success || listRes?.status === 'success') {
+          const list = listRes.data?.payments || [];
+          const transformed = list.map(p => ({
+            member: p.memberDetails?.name || p.memberName || 'Unknown',
+            email: p.memberDetails?.email || p.memberEmail || '',
+            amount: Number(p.amount || 0),
+            mode: (p.paymentMethod || p.method || 'unknown').toLowerCase(),
+            date: p.paymentDate?.slice?.(0,10) || '',
+            planType: p.planType || p.plan || ''
+          }));
+          const name = (filters.memberName || '').toLowerCase();
+          setPayments(name ? transformed.filter(x => (x.member || '').toLowerCase().includes(name)) : transformed);
+        } else {
+          setPayments([]);
+        }
       }
     } catch (e) {
       console.error('Failed to load report data:', e);
@@ -200,7 +204,7 @@ const Reports = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [filters, authFetch]);
+  }, [filters, authFetch, isSuperAdmin, isGymOwner]);
 
   useEffect(() => {
     // Load for gym owners and super admins
