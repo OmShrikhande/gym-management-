@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { toast } from 'sonner';
+import { canUse, recordUse } from '@/utils/usageLimiter';
 
 // API URL - Use environment variable or fallback to production
 const API_URL = import.meta.env.VITE_API_URL || 'https://gym-management-system-ckb0.onrender.com/api';
@@ -20,6 +21,15 @@ export const openGate = async (user, token) => {
   }
 
   try {
+    // Limit: trainers can open gate only 2 times per day
+    if (user.role === 'trainer') {
+      const { allowed } = canUse('trainer_gate_open', user._id, 2);
+      if (!allowed) {
+        toast.error('Daily limit reached: Trainers can open the gate only 2 times per day.');
+        return { success: false, message: 'Daily gate open limit reached' };
+      }
+    }
+
     // Show loading state
     toast.loading('Opening gate...', { id: 'gate-opening' });
 
@@ -65,6 +75,11 @@ export const openGate = async (user, token) => {
           gateStatus: true
         } 
       }));
+      
+      // Record usage for trainers on success
+      if (user.role === 'trainer') {
+        recordUse('trainer_gate_open', user._id);
+      }
       
       return { 
         success: true, 

@@ -6,6 +6,7 @@ import { Camera, CameraOff, Scan, CheckCircle, X, Upload, AlertCircle } from 'lu
 import { toast } from 'sonner';
 import axios from 'axios';
 import { useAuth } from '@/contexts/AuthContext';
+import { canUse, recordUse } from '@/utils/usageLimiter';
 
 // API URL - Use environment variable or fallback to production
 const API_URL = import.meta.env.VITE_API_URL || 'https://gym-management-system-ckb0.onrender.com/api';
@@ -104,6 +105,15 @@ const QRCodeScanner = ({ onScanSuccess, onClose, memberId }) => {
     if (!token || !user) {
       toast.error('Please log in to verify membership');
       return;
+    }
+
+    // Limit: members can scan only 2 times per day
+    if (user.role === 'member') {
+      const { allowed } = canUse('member_qr_scan', user._id, 2);
+      if (!allowed) {
+        toast.error('Daily limit reached: You can scan only 2 times today.');
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -210,6 +220,11 @@ const QRCodeScanner = ({ onScanSuccess, onClose, memberId }) => {
         window.dispatchEvent(new CustomEvent('attendanceMarked', { 
           detail: { memberId: memberId || user?._id } 
         }));
+
+        // Record usage for members on successful verification/mark
+        if (user.role === 'member') {
+          recordUse('member_qr_scan', user._id);
+        }
       }
 
       setTimeout(() => resetScanner(), 3000);

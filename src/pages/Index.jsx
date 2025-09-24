@@ -1293,7 +1293,7 @@ const Index = () => {
           { label: "Create Workout", icon: Dumbbell, action: () => navigate("/workouts") },
           { label: "Create Diet Plan", icon: UtensilsCrossed, action: () => navigate("/diet-plans") },
           { label: "Open Gate", icon: Shield, action: handleOpenGate },
-          { label: "Scan QR", icon: Scan, action: () => setShowQRScanner(true) },
+          // { label: "Scan QR", icon: Scan, action: () => setShowQRScanner(true) },
           { label: "View Members", icon: Users, action: () => navigate("/my-members") }
         ];
       case 'member':

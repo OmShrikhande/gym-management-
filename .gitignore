@@ -26,6 +26,7 @@ lerna-debug.log*
 
 # === Environment files (Frontend & Backend) ===
 .env
+.env.development
 .env.*
 Backend/**/.env
 Backend/**/.env.*
