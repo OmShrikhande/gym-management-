@@ -616,7 +616,7 @@ const Profile = () => {
               <div className="flex-1 text-center md:text-left">
                 <h2 className="text-2xl font-bold text-white mb-2">{profileData.fullName}</h2>
                 <p className="text-gray-400 mb-2">{profileData.specialization}</p>
-                <p className="text-gray-400 mb-4">{profileData.experience} of experience</p>
+                <p className="text-gray-400 mb-4">{profileData.experience} years of experience</p>
                 
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-300">
                   <div className="flex items-center space-x-2">
