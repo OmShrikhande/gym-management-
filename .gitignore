@@ -13,7 +13,7 @@ build/
 # === Vite/React ===
 .vite/
 .react/
-
+*.zencoder
 # === Logs ===
 logs/
 *.log

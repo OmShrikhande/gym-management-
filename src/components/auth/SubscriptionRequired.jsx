@@ -704,26 +704,24 @@ const SubscriptionRequired = () => {
                         </Button>
                       </div>
                       
-                      {/* Test Mode Button for Development */}
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="pt-2 border-t border-gray-600">
-                          <Button 
-                            variant="outline"
-                            className="w-full border-yellow-600 text-yellow-400 hover:bg-yellow-600 hover:text-white"
-                            disabled={isProcessing}
-                            onClick={handleTestModePayment}
-                          >
-                            {isProcessing ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Processing Test Payment...
-                              </>
-                            ) : (
-                              "Test Mode Activation (Dev Only)"
-                            )}
-                          </Button>
-                        </div>
-                      )}
+                      {/* Test Mode Button - Always Available */}
+                      <div className="pt-2 border-t border-gray-600">
+                        <Button 
+                          variant="outline"
+                          className="w-full border-yellow-600 text-yellow-400 hover:bg-yellow-600 hover:text-white"
+                          disabled={isProcessing}
+                          onClick={handleTestModePayment}
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing Test Payment...
+                            </>
+                          ) : (
+                            "Test Mode Activation"
+                          )}
+                        </Button>
+                      </div>
 
                     </div>
                     <div className="mt-2 text-center space-y-1">
