@@ -231,12 +231,20 @@ const SubscriptionRequired = () => {
       
       let endpoint, method, body;
       
+      const planId = selectedPlan._id || selectedPlan.id;
+
+      if (!planId) {
+        toast.error('Selected plan is missing required information. Please refresh and try again.');
+        setIsProcessing(false);
+        return;
+      }
+
       if (isRenewal) {
         // Renew existing subscription
         endpoint = `${API_URL}/subscriptions/${subscription.subscription._id}/renew`;
         method = 'POST';
         body = {
-          durationMonths: 1,
+          planId,
           paymentMethod: 'test_mode',
           transactionId: mockTransactionId
         };
@@ -246,9 +254,8 @@ const SubscriptionRequired = () => {
         method = 'POST';
         body = {
           gymOwnerId: user._id,
-          plan: selectedPlan.name,
+          planId,
           price: selectedPlan.price,
-          durationMonths: 1,
           paymentMethod: 'test_mode',
           transactionId: mockTransactionId
         };

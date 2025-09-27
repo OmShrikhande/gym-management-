@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Subscription from '../models/subscriptionModel.js';
 import Notification from '../models/notificationModel.js';
 import User from '../models/userModel.js';
+import SubscriptionPlan from '../models/subscriptionPlanModel.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 
@@ -239,29 +240,60 @@ export const createSubscription = catchAsync(async (req, res, next) => {
     let planName = plan;
     let durationMonths = durationOverride ?? 1;
 
-    if (planId) {
-      try {
-        selectedPlan = await SubscriptionPlan.findById(planId);
-        if (!selectedPlan) {
-          return next(new AppError('Selected subscription plan not found', 404));
-        }
+    const durationMap = {
+      monthly: 1,
+      quarterly: 3,
+      yearly: 12
+    };
 
-        planName = selectedPlan.name;
-
-        // Map plan duration to months when duration override is not provided
-        if (durationOverride == null) {
-          const durationMap = {
-            monthly: 1,
-            quarterly: 3,
-            yearly: 12
-          };
-
-          durationMonths = durationMap[selectedPlan.duration] || 1;
-        }
-      } catch (planError) {
-        console.error('Failed to fetch subscription plan:', planError.message);
-        return next(new AppError('Failed to fetch subscription plan', 500));
+    const resolvePlanById = async (candidateId) => {
+      if (!candidateId || !mongoose.Types.ObjectId.isValid(candidateId)) {
+        return null;
       }
+
+      try {
+        return await SubscriptionPlan.findById(candidateId);
+      } catch (planError) {
+        console.error('Failed to fetch subscription plan by ID:', planError.message);
+        return null;
+      }
+    };
+
+    if (planId) {
+      selectedPlan = await resolvePlanById(planId);
+      if (!selectedPlan) {
+        console.warn(`Plan not found for provided planId: ${planId}. Attempting fallback lookups.`);
+      }
+    }
+
+    if (!selectedPlan && typeof plan === 'string') {
+      const trimmedPlan = plan.trim();
+      const [namePart, idPart] = trimmedPlan.split('|').map((part) => part.trim());
+
+      if (idPart) {
+        selectedPlan = await resolvePlanById(idPart);
+      }
+
+      if (!selectedPlan && namePart) {
+        try {
+          selectedPlan = await SubscriptionPlan.findOne({ name: namePart });
+        } catch (planError) {
+          console.error('Failed to fetch subscription plan by name:', planError.message);
+          return next(new AppError('Failed to fetch subscription plan', 500));
+        }
+      }
+
+      planName = namePart || trimmedPlan;
+    }
+
+    if (selectedPlan) {
+      planName = selectedPlan.name;
+
+      if (durationOverride == null) {
+        durationMonths = durationMap[selectedPlan.duration] || selectedPlan.durationMonths || 1;
+      }
+    } else if (planId) {
+      return next(new AppError('Selected subscription plan not found', 404));
     }
 
     // Ensure plan name is available for storage
