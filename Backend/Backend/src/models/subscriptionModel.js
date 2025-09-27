@@ -52,6 +52,15 @@ const subscriptionSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  planMetadata: {
+    type: {
+      planId: mongoose.Schema.Types.ObjectId,
+      duration: String,
+      maxMembers: Number,
+      maxTrainers: Number
+    },
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

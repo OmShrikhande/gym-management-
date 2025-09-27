@@ -213,14 +213,14 @@ export const createSubscription = catchAsync(async (req, res, next) => {
     console.log('User:', req.user.email, 'Role:', req.user.role);
     console.log('Request:', { gymOwnerId: req.body.gymOwnerId, plan: req.body.plan, price: req.body.price, paymentMethod: req.body.paymentMethod });
     
-    const { gymOwnerId, plan, price, durationMonths = 1, paymentMethod, transactionId } = req.body;
+    const { gymOwnerId, planId, plan, price, durationMonths: durationOverride, paymentMethod, transactionId } = req.body;
     
     // Ensure transactionId is provided
     const finalTransactionId = transactionId || `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Validate required fields
-    if (!gymOwnerId || !plan || !price || !paymentMethod) {
-      return next(new AppError('Missing required fields: gymOwnerId, plan, price, paymentMethod', 400));
+    if (!gymOwnerId || (!planId && !plan) || !price || !paymentMethod) {
+      return next(new AppError('Missing required fields: gymOwnerId, planId/plan, price, paymentMethod', 400));
     }
 
     // Validate and parse price
@@ -232,6 +232,41 @@ export const createSubscription = catchAsync(async (req, res, next) => {
     // Validate gymOwnerId format
     if (!mongoose.Types.ObjectId.isValid(gymOwnerId)) {
       return next(new AppError('Invalid gym owner ID format', 400));
+    }
+
+    // Fetch plan details if planId is provided
+    let selectedPlan = null;
+    let planName = plan;
+    let durationMonths = durationOverride ?? 1;
+
+    if (planId) {
+      try {
+        selectedPlan = await SubscriptionPlan.findById(planId);
+        if (!selectedPlan) {
+          return next(new AppError('Selected subscription plan not found', 404));
+        }
+
+        planName = selectedPlan.name;
+
+        // Map plan duration to months when duration override is not provided
+        if (durationOverride == null) {
+          const durationMap = {
+            monthly: 1,
+            quarterly: 3,
+            yearly: 12
+          };
+
+          durationMonths = durationMap[selectedPlan.duration] || 1;
+        }
+      } catch (planError) {
+        console.error('Failed to fetch subscription plan:', planError.message);
+        return next(new AppError('Failed to fetch subscription plan', 500));
+      }
+    }
+
+    // Ensure plan name is available for storage
+    if (!planName) {
+      return next(new AppError('Plan name is required', 400));
     }
 
     // Check if gym owner exists
@@ -277,7 +312,7 @@ export const createSubscription = catchAsync(async (req, res, next) => {
     try {
       subscription = await Subscription.create({
         gymOwner: gymOwnerId,
-        plan,
+        plan: planName,
         price: parsedPrice,
         startDate,
         endDate,
@@ -292,7 +327,13 @@ export const createSubscription = catchAsync(async (req, res, next) => {
             transactionId: finalTransactionId
           }
         ],
-        autoRenew: true
+        autoRenew: true,
+        planMetadata: selectedPlan ? {
+          planId: selectedPlan._id,
+          duration: selectedPlan.duration,
+          maxMembers: selectedPlan.maxMembers,
+          maxTrainers: selectedPlan.maxTrainers
+        } : undefined
       });
       
       console.log('Subscription created successfully:', subscription._id);
