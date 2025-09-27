@@ -718,7 +718,7 @@ const SubscriptionRequired = () => {
                               Processing Test Payment...
                             </>
                           ) : (
-                            "Test Mode Activation"
+                            "Skip Payment"
                           )}
                         </Button>
                       </div>
